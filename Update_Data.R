@@ -1,4 +1,5 @@
-####Update saved data
+####Extract data from k-limbic file and update the saved .csv file. Written for my (FD) experiments
+####and will need to be adapted.
 
 # Reading in data from mPRL task
 # This code assumes that the number of columns in the data is 60
@@ -249,4 +250,5 @@ prl_n_8 <- data %>%
 # Save the data with a useful name
 write_csv(prl_n_8,
           file = paste0('Processed Data/','PRL_PRELIM.csv'))
+
 
