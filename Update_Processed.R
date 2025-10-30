@@ -1,6 +1,12 @@
 ###Process for reversals, accuracy, win-stay & lose-shift
+Experiment<-"MK-801"
 
-data <- read_csv("Processed Data/PRL_PRELIM.csv" )
+if (!exists("Experiment")){
+  Experiment<-"PRL"
+  
+}
+
+data <- read_csv(paste0("Processed Data/",Experiment,"_PRELIM.csv"))
 
 prl<-(data|>
          filter(
@@ -128,9 +134,14 @@ m_prl_sum<-prl_sum|>
             m_m_perseverence=mean(m_perseverence,na.rm=TRUE))
 
 write_csv(prl,
-          file = paste0('Processed Data/','PRL_PROCESSED.csv'))
-write_csv(prl_sum,
-          file = paste0('Processed Data/','PRL_SUM.csv'))
-write_csv(m_prl_sum,
-          file = paste0('Processed Data/','PRL_SUM_MEANS.csv'))
+          file = paste0('Processed Data/',Experiment,'_PROCESSED.csv'))
+
+if (Experiment=="PRL"){
+  
+  write_csv(prl_sum,
+          file = paste0('Processed Data/',Experiment,'_SUM.csv'))
+  
+  write_csv(m_prl_sum,
+          file = paste0('Processed Data/',Experiment,'_SUM_MEANS.csv'))
+} else {warning("(FREYA) Summaries & means not automatically saved for specific experiments. May need to assign doses.")}
 
