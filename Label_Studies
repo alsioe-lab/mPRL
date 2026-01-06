@@ -1,0 +1,114 @@
+##LABEL STUDIES 
+prl_n_8 <- read_csv("Processed Data/Experimental_PRELIM.csv" )
+
+df <- read_csv("DrugDates.csv")
+
+df<-df|>
+  pivot_longer(cols = -c(Mouse_ID,Drug,Cohort),
+               names_to = "Date_Code",
+               values_to = "Dose_Code")
+
+##COULD do this in more efficient way but this is clearer. Could use another csv
+#but probably not clearer than this
+
+df <- df %>% mutate(Dose = case_when(
+  Dose_Code == "A" & Drug == "MK-801" ~ "Saline",
+  Dose_Code == "B" & Drug == "MK-801" ~ "0.1mg/kg",
+  Dose_Code == "C" & Drug == "MK-801" ~ "0.05mg/kg",
+  
+  Dose_Code == "A" & Drug == "Quinpirole" ~ "0.125mg/kg",
+  Dose_Code == "B" & Drug == "Quinpirole" ~ "0.5mg/kg",
+  Dose_Code == "C" & Drug == "Quinpirole" ~ "Saline",
+  Dose_Code == "D" & Drug == "Quinpirole" ~ "0.25mg/kg",
+  
+  Dose_Code == "A" & Drug == "Aripiprazole" ~ "Vehicle",
+  Dose_Code == "B" & Drug == "Aripiprazole" ~ "0.3mg/kg",
+  Dose_Code == "C" & Drug == "Aripiprazole" ~ "1mg/kg",
+  Dose_Code == "D" & Drug == "Aripiprazole" ~ "3mg/kg"
+  ),
+  
+  Date= case_when(
+    Date_Code=="Day1" & Drug =="MK-801"  & Cohort=="cohort1" ~ "2025-10-21",
+    Date_Code=="Day2" & Drug =="MK-801"  & Cohort=="cohort1" ~ "2025-10-24",
+    Date_Code=="Day3" & Drug =="MK-801"  & Cohort=="cohort1" ~ "2025-10-28",
+    
+    Date_Code=="Day1" & Drug =="MK-801"  & Cohort=="cohort2" ~ "2025-11-14",
+    Date_Code=="Day2" & Drug =="MK-801"  & Cohort=="cohort2" ~ "2025-11-18",
+    Date_Code=="Day3" & Drug =="MK-801"  & Cohort=="cohort2" ~ "2025-11-21",
+    
+    Date_Code=="Day1" & Drug =="Quinpirole"  & Cohort=="cohort1" ~ "2025-11-11",
+    Date_Code=="Day2" & Drug =="Quinpirole"  & Cohort=="cohort1" ~ "2025-11-14",
+    Date_Code=="Day3" & Drug =="Quinpirole"  & Cohort=="cohort1" ~ "2025-11-18",
+    Date_Code=="Day4" & Drug =="Quinpirole"  & Cohort=="cohort1" ~ "2025-11-21",
+    
+    Date_Code=="Day1" & Drug =="Quinpirole"  & Cohort=="cohort2" ~ "2025-11-28",
+    Date_Code=="Day2" & Drug =="Quinpirole"  & Cohort=="cohort2" ~ "2025-12-02",
+    Date_Code=="Day3" & Drug =="Quinpirole"  & Cohort=="cohort2" ~ "2025-12-05",
+    Date_Code=="Day4" & Drug =="Quinpirole"  & Cohort=="cohort2" ~ "2025-12-09",
+    
+    Date_Code=="Day1" & Drug =="Aripiprazole"  & Cohort=="cohort1" ~ "2025-12-02",
+    Date_Code=="Day2" & Drug =="Aripiprazole"  & Cohort=="cohort1" ~ "2025-12-05",
+    Date_Code=="Day3" & Drug =="Aripiprazole"  & Cohort=="cohort1" ~ "2025-12-09",
+    Date_Code=="Day4" & Drug =="Aripiprazole"  & Cohort=="cohort1" ~ "2025-12-12",
+    
+    Date_Code=="Day1" & Drug =="Aripiprazole"  & Cohort=="cohort2" ~ "2025-12-12",
+    Date_Code=="Day2" & Drug =="Aripiprazole"  & Cohort=="cohort2" ~ "2025-12-16",
+    Date_Code=="Day3" & Drug =="Aripiprazole"  & Cohort=="cohort2" ~ "2025-12-19",
+    Date_Code=="Day4" & Drug =="Aripiprazole"  & Cohort=="cohort2" ~ "2025-12-22"
+  
+  ))
+
+df$Date<-as.Date(df$Date)
+prl_n_8$date<-dmy(prl_n_8$date)
+prl_n_8<-(prl_n_8|>
+            filter(
+              day_table=="PRL - Constant Criteria")
+      
+)
+
+
+####next step will use 'assign doses code' to match df to master data
+
+prl_n_8$cohort<-NA
+prl_n_8$drug<-NA
+prl_n_8$dose<-NA
+
+for (i in 1:dim(prl_n_8)[1]){
+  
+  treatment<-subset(df,
+                    Mouse_ID==prl_n_8$subj_id[i] &
+                    Date==prl_n_8$date[i])
+  
+  if (dim(treatment)[1]>0){
+    prl_n_8$cohort[i]<-treatment$Cohort
+    prl_n_8$drug[i]<-treatment$Drug
+    prl_n_8$dose[i]<-treatment$Dose
+  }
+  
+  #if there is no subset, it is because it was a baseline day. look for the day
+  #after and record the COHORT and TREATMENT but NO DOSE!
+  if (dim(treatment)[1]==0){
+    
+    treatment<-subset(df,
+                      Mouse_ID==prl_n_8$subj_id[i] &
+                      Date==prl_n_8$date[i]+1)
+    
+    #if there was a previous day crack on
+    if (dim(treatment)[1]>0){
+      prl_n_8$cohort[i]<-treatment$Cohort
+      prl_n_8$drug[i]<-treatment$Drug
+      prl_n_8$dose[i]<-"Baseline"} else if (dim(treatment)[1]==0){
+        #if there wasn't this was a non experimental period
+        prl_n_8$cohort[i]<-NA
+        prl_n_8$drug[i]<-"Non_Testing"
+        prl_n_8$dose[i]<-"Non_Testing"
+      }
+  }
+  
+  rm(treatment)
+}
+
+write_csv(prl_n_8,
+          file = paste0('Processed Data/Experimental_PRELIM_LABELED.csv'))
+
+
