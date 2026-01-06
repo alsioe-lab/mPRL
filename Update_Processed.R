@@ -1,12 +1,12 @@
 ###Process for reversals, accuracy, win-stay & lose-shift
-Experiment<-"MK-801"
+#Experiment<-"Experimental"
 
 if (!exists("Experiment")){
   Experiment<-"PRL"
   
 }
 
-data <- read_csv(paste0("Processed Data/",Experiment,"_PRELIM.csv"))
+data <- read_csv(paste0("Processed Data/",Experiment,"_PRELIM_LABELED.csv"))
 
 prl<-(data|>
          filter(
@@ -14,13 +14,14 @@ prl<-(data|>
        
 )
 
-prl$date<-dmy(prl$date)
-prl<-prl[complete.cases(prl), ]
+#prl$date<-dmy(prl$date)
+prl<-prl[complete.cases(prl), ] ###THIS ELIMINATES NON-EXPERIMENTAL DAYS 
 prl$opt<-0
 prl$towards_criterion<-0
 prl$win_stay<-0
 prl$lose_shift<-0
 prl$true_win_stay<-0
+prl$reversal<-0
 prl$perseverence_counter<-0
 prl$perseverence<-0
 
@@ -79,11 +80,21 @@ for (trial in 1:dim(prl)[1]){
     } #end of chose optimum side
   } #end not the first trial, winstay loseshift
   
-  #PERSEVERENCE
+  #PERSEVERENCE & TRIALS TO REVERSAL
   #not the first trial
   if (!prl$trial[trial]==1){
+    
+    if (prl$towards_criterion[trial-1]<6){
+      #Trials2CRIT: Reversal has NOT happened. Maintain reversal counter
+      prl$reversal[trial]<-prl$reversal[trial-1]
+    }
+    
     if (prl$towards_criterion[trial-1]==6){
-      #reversal has just happened. do they chose a different side?
+      #Reversal HAS happened. Trials2CRIT: Update reversal counter
+      prl$reversal[trial]<-prl$reversal[trial-1]+1
+      
+      #Perseverence: Do they chose a different side?
+      
       if (prl$chose_left[trial-1]==prl$chose_left[trial]){
         #NO, add one to counter
         prl$perseverence_counter[trial]<-1
@@ -108,40 +119,40 @@ for (trial in 1:dim(prl)[1]){
 
 prl$perseverence_true<-prl$perseverence>0
 
-prl_sum<-prl|>
-  group_by(subj_id,date)|>
-  summarise(crits=sum(towards_criterion==6),
-            trials=max(trial),
-            crit_per_100=((sum(towards_criterion==6))/max(trial))*100,
-            win_stay_prob=(sum(win_stay==1))/sum(reward==1),
-            lose_shift_prob=sum(lose_shift==1)/sum(reward==0),
-            percent_chose_left=(sum(chose_left==1)/max(trial))*100,
-            accuracy=(sum(opt)/max(trial))*100,#
-            n_trials=max(trial),
-            true_win_stay_prob=(sum(true_win_stay==1))/sum(opt==1),
-            m_perseverence=sum(perseverence)/sum(perseverence_true)
-            )
-
-m_prl_sum<-prl_sum|>
-  group_by(date)|>
-  summarise(m_crit_per_100=mean(crit_per_100),
-            m_win_stay_prob=mean(win_stay_prob),
-            m_lose_shift_prob=mean(lose_shift_prob),
-            m_accuracy=mean(accuracy),
-            m_crits=mean(crits),
-            m_n_trials=mean(n_trials),
-            m_true_win_stay_prob=mean(true_win_stay_prob),
-            m_m_perseverence=mean(m_perseverence,na.rm=TRUE))
-
 write_csv(prl,
           file = paste0('Processed Data/',Experiment,'_PROCESSED.csv'))
 
 if (Experiment=="PRL"){
+  
+  prl_sum<-prl|>
+    group_by(subj_id,date)|>
+    summarise(crits=sum(towards_criterion==6),
+              trials=max(trial),
+              crit_per_100=((sum(towards_criterion==6))/max(trial))*100,
+              win_stay_prob=(sum(win_stay==1))/sum(reward==1),
+              lose_shift_prob=sum(lose_shift==1)/sum(reward==0),
+              percent_chose_left=(sum(chose_left==1)/max(trial))*100,
+              accuracy=(sum(opt)/max(trial))*100,#
+              n_trials=max(trial),
+              true_win_stay_prob=(sum(true_win_stay==1))/sum(opt==1),
+              m_perseverence=sum(perseverence)/sum(perseverence_true)
+    )
+  
+  m_prl_sum<-prl_sum|>
+    group_by(date)|>
+    summarise(m_crit_per_100=mean(crit_per_100),
+              m_win_stay_prob=mean(win_stay_prob),
+              m_lose_shift_prob=mean(lose_shift_prob),
+              m_accuracy=mean(accuracy),
+              m_crits=mean(crits),
+              m_n_trials=mean(n_trials),
+              m_true_win_stay_prob=mean(true_win_stay_prob),
+              m_m_perseverence=mean(m_perseverence,na.rm=TRUE))
   
   write_csv(prl_sum,
           file = paste0('Processed Data/',Experiment,'_SUM.csv'))
   
   write_csv(m_prl_sum,
           file = paste0('Processed Data/',Experiment,'_SUM_MEANS.csv'))
-} else {warning("(FREYA) Summaries & means not automatically saved for specific experiments. May need to assign doses.")}
+} else {warning("(FREYA) Summaries & means not automatically saved for specific experiments. May want to process by dose.")}
 
