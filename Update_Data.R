@@ -1,5 +1,4 @@
-####Extract data from k-limbic file and update the saved .csv file. Written for my (FD) experiments
-####and will need to be adapted.
+####Update saved data
 
 # Reading in data from mPRL task
 # This code assumes that the number of columns in the data is 60
@@ -40,6 +39,8 @@ subjects <- c("fd_01_1",
               "fd_01_12")
 
 # Troubleshooting
+#LIST_OF_FILES<-"11-Nov-2025_Combined.csv"
+#FILE<-"11-Nov-2025_Combined.csv"
 
 for (FILE in LIST_OF_FILES) {
   
@@ -128,26 +129,77 @@ for (FILE in LIST_OF_FILES) {
       warning("PROTOCOLS IN DAY DOESNT MATCH SESSION DURATIONS")
     }
     
-    session_notes<-
-      data.frame(
-        protocols=protocols_in_day,
-        duration=session_durations,
-        pos_starts=pos_starts,
-        subjects_in_session=subjects_in_session,
-        pos_Subject_Id=pos_Subject_Id,
-        include=TRUE
-      )
     
-    for (PROT in 1:dim(session_notes)[1]){
-      if ((!session_notes$protocols[PROT]=="PRL")|(session_notes$duration[PROT]<30000)){
-        session_notes$include[PROT]<-FALSE
+    ##Probably a better way to do this but some output doesnt use ACTIVITYLOG
+    ##to mark the end of a run. first check if they correlate.
+    
+    if (length(pos_starts)==length(pos_ends)){
+      #if they do, manage the same as previously
+      
+      session_notes<-
+        data.frame(
+          protocols=protocols_in_day,
+          duration=session_durations,
+          pos_starts=pos_starts,
+          pos_ends=pos_ends,
+          subjects_in_session=subjects_in_session,
+          pos_Subject_Id=pos_Subject_Id,
+          include=TRUE
+        )
+      
+      for (PROT in 1:dim(session_notes)[1]){
+        if ((!session_notes$protocols[PROT]=="PRL")|(session_notes$duration[PROT]<30000)){
+          session_notes$include[PROT]<-FALSE
+        }
       }
-    }
+      
+      session_notes<-session_notes|>
+        filter(include==TRUE)    } #end of pos_starts==pos_ends
     
-    session_notes<-session_notes|>
-      filter(include==TRUE)
+    #if they dont...
+    if (!length(pos_starts)==length(pos_ends)){
+      
+      #do not include pos_ends in original df
+      session_notes<-
+        data.frame(
+          protocols=protocols_in_day,
+          duration=session_durations,
+          pos_starts=pos_starts,
+          subjects_in_session=subjects_in_session,
+          pos_Subject_Id=pos_Subject_Id,
+          include=TRUE
+        )
+      
+      
+      #first eliminate non-prl protocols
+      for (PROT in 1:dim(session_notes)[1]){
+        if ((!session_notes$protocols[PROT]=="PRL")){
+          session_notes$include[PROT]<-FALSE
+        }
+        }
+      
+      session_notes<-session_notes|>
+        filter(include==TRUE)
+      
+      #then can include #position ends-> this must be done seperately because
+      #pos_ends is flagged based on text that only appears in the PRL protocol
+      #sessions
+      session_notes$pos_ends<-pos_ends
+      
+      for (PROT in 1:dim(session_notes)[1]){
+        if (session_notes$duration[PROT]<30000){
+          session_notes$include[PROT]<-FALSE
+        }
+      }
+      
+      session_notes<-session_notes|>
+        filter(include==TRUE)
+    } #END MISMATCH START & ENDS
+   
+    
     #returning it to a list, in future can pull data from df but cba now
     pos_starts<-session_notes$pos_starts
+    pos_ends<-session_notes$pos_ends
     subjects_in_session<-session_notes$subjects_in_session
     pos_Subject_Id<-session_notes$pos_Subject_Id
     
@@ -239,16 +291,19 @@ prl_n_8 <- data %>%
          reward_latency = (c46 - c45) * c47,
          response_latency = (c36 - c35) + (c41-c40),
          initiate_latency = c16 - c15,
-         left_is_active = as.numeric(c35 > c40)
+         left_is_active = as.numeric(c35 > c40),
+         response_time = (c35+c40)
   ) %>%
   # Select the columns to carry forward - we drop all the columns
   # with raw data from K-Limbic at this point
   dplyr::select(subj_id, date, time, box, day_table,
                 trial, chose_left, reward, left_is_active,
-                reward_latency, response_latency, initiate_latency)
+                reward_latency, response_latency, initiate_latency,response_time)
+
+#Label the studies
+#source("Label_Studies_2.r")
 
 # Save the data with a useful name
 write_csv(prl_n_8,
-          file = paste0('Processed Data/','PRL_PRELIM.csv'))
-
+          file = paste0('Processed Data/Data_PRELIM.csv'))
 
