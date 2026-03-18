@@ -1,0 +1,60 @@
+####Data processing summary Experimental
+
+##Basic
+library(tidyverse)
+rm(list=ls())
+
+#(1)Update basic data. This takes data stored in "Experimental" and extracts it.
+source("Update_Experimental_Data_2.R")
+
+#The output is saved as Experimental_PRELIM.csv
+test<-read_csv("Processed Data/Experimental_PRELIM.csv" )
+
+
+#(2)Label the data. Seperate to (1) in case needs updating. Takes 
+#Experimental_PRELIM.csv and assigns the cohort, drug and dose based on
+#information saved in "DrugDates.csv"
+source("Label_Studies_2.r")
+
+#The output is saved as Experimental_PRELIM_LABELED.csv
+test<-read_csv("Processed Data/Experimental_PRELIM_LABELED.csv" )
+
+#(3) Calculates win stay, crits, trials etc. Update processed is universal for 
+#training data so experiment must be set to experimental to take the 
+#correct .csv check if working.
+
+Experiment<-"Experimental"
+source("Update_Processed.R")
+
+#saves output as Experimental_PROCESSED.csv
+prl<-read_csv("Processed Data/Experimental_PROCESSED.csv" )
+
+
+#Check you have the correct number of days per drug. this will include baseline days 
+prl|>
+  group_by(date,drug,subj_id)|>
+  summarise(n=n())|>
+  group_by(drug)|>
+  summarise(n=n())
+
+prl|>
+  group_by(date,drug,dose)|>
+  summarise(n=n())|>
+  group_by(drug,dose)|>
+  summarise(n=n())
+
+
+test<-prl|>
+  group_by(date,drug,subj_id)|>
+  summarise(n=n())|>
+  group_by(drug,date)|>
+  summarise(n=n())
+
+view(filter(test,drug=="Aripiprazole"))
+#????Calculate means per reversal
+
+#Experimental BoxPlots.R for immediate plots, uses BY DRUG means
+
+#"MK-801 Basic Plots.r" summarises basic bar graphs
+
+
