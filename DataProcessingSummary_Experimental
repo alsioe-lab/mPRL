@@ -14,12 +14,12 @@ test<-read_csv("Processed Data/Experimental_PRELIM.csv" )
 #(2)Label the data. Seperate to (1) in case needs updating. Takes 
 #Experimental_PRELIM.csv and assigns the cohort, drug and dose based on
 #information saved in "DrugDates.csv"
-source("Label_Studies_2.r")
+source("Label_Studies.r")
 
 #The output is saved as Experimental_PRELIM_LABELED.csv
 test<-read_csv("Processed Data/Experimental_PRELIM_LABELED.csv" )
 
-#(3) Calculates win stay, crits, trials etc. Update processed is universal for 
+#(3) PROCESS DATA: Calculates win stay, crits, trials etc. Update processed is universal for 
 #training data so experiment must be set to experimental to take the 
 #correct .csv check if working.
 
