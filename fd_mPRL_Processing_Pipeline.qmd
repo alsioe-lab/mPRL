@@ -1,0 +1,699 @@
+---
+title: "fd_mPRL_Processing_Pipeline"
+format: html
+editor: visual
+---
+
+## 1. Setting Up
+
+```{r}
+#| label: setup
+#| echo: false
+
+
+# rm(list=ls())
+library(tidyverse)
+library(cowplot)
+
+# Point the script to the shared K-Limbic files (read only)
+# I find that this can read quite slowly from the RDSF -
+# copying over the files locally might speed this process up
+# DATA_DIR <- file.path('Z:/',
+#                       'K-Limbic'
+#                       )
+
+
+DATA_DIR <- file.path('Z:/',
+                      'K-Limbic')
+
+# Output directory, to save figures and files
+OUTPUT_DIR <- file.path('Cohort 2/',
+                        'Processed Data')
+```
+
+##2. SELECT FILES AND MICE
+
+##2.1 SELECT EXPERIMENT
+```{r}
+
+# TODO: this needs to be interactive at some point
+
+#decide experiment
+experiment<-"mk801_007_coh1"
+experiment<-"recent_data"
+```
+
+##2.2 FILES/MICE
+```{r}
+#| label: select files
+#| echo: false
+
+#list.files(DATA_DIR)
+
+# Manually hard code the subject IDs
+mice <- c(1:24)
+
+# Code in the files to look at
+recent_data_files<-c(list.files(DATA_DIR,pattern = "May-2026_Combined.csv"),
+                     list.files(DATA_DIR,pattern = "Jun-2026_Combined.csv"))
+
+mk801_007_coh1_files<-c('22-Apr-2026_Combined.csv',
+                        '28-Apr-2026_Combined.csv',
+                        '01-May-2026_Combined.csv',
+                        '06-May-2026_Combined.csv')
+
+files_to_analyse <- c(get(paste0(experiment,"_files")))
+```
+
+##3.0 RAW DATA FROM FILES ##3.1 Update Raw Data & save Data is saved as to "Cohort 2/Processed Data" as df_reversal\_<experiment>. Select experiment above. Object in enviroment called df_reversal
+
+```{r}
+#| label: read trl
+
+
+for (FILE in files_to_analyse) {
+
+    if (FILE == files_to_analyse[1]) sessions <- list()
+
+    # For trouble shooting
+    # FILE = files_to_analyse[1]
+
+    # Read in all the data from FILE as lines
+    # and store in temporary holder, as_lines
+    as_lines <- read_lines(file.path(DATA_DIR, FILE))
+    
+    # Trials start at
+    pos_starts <- grep(pattern = TRUE,
+                       x = str_starts(string = as_lines,
+                                      pattern = 'Ref')
+                       ) + 1
+    
+    # Trials end at
+    pos_ends <- grep(pattern = TRUE,
+                     x = str_starts(string = as_lines,
+                                    pattern = 'ACTIVITYLOG')
+                     ) - 2
+    
+    # Identify relevant rows (indices) for various bits of information 
+    pos_Subject_Id <- grep(pattern = TRUE,
+                           x = str_starts(string = as_lines,
+                                          pattern = 'Subject Id')
+                           )
+    
+    # Set up various place holders
+    subjects_in_file <- vector()
+    dates_in_file <- vector()
+    start_times_in_file <- vector()
+    boxes_in_file <- vector()
+    databases_in_file <- vector()
+    day_tables_in_file <- vector()
+    
+    
+    # TODO: consider improving this solution to get the Subject IDs out
+    for (i in 1:length(pos_Subject_Id))  {
+      
+      # List of subjects
+      # as.character not needed, but used to be as.numeric
+      subjects_in_file[i] <- as.character(
+        str_split(string = as_lines[pos_Subject_Id[i]],
+                  pattern = ',')[[1]][2]
+        )
+
+      # List of start times
+      dates_in_file[i] <- as.character(
+        str_split(string = as_lines[pos_Subject_Id[i] - 16],
+                  pattern = ',')[[1]][2]
+        )
+            
+      # List of start times
+      start_times_in_file[i] <- as.character(
+        str_split(string = as_lines[pos_Subject_Id[i] - 15],
+                  pattern = ',')[[1]][2]
+        )
+      
+      # List of boxes
+      boxes_in_file[i] <- as.integer(
+        str_split(string = as_lines[pos_Subject_Id[i] - 14],
+                  pattern = ',')[[1]][2]
+        )
+      
+      # List of databases
+      databases_in_file[i] <- as.character(
+          str_split(string = as_lines[pos_Subject_Id[i] + 1],
+                    pattern = ',')[[1]][2]
+      )
+      
+      # List of day tables
+      day_tables_in_file[i] <- as.character(
+          str_split(string = as_lines[pos_Subject_Id[i] + 3],
+                    pattern = ',')[[1]][2]
+      )
+      
+    }
+    
+    # New for loop
+    for (i in 1:length(pos_Subject_Id)) {
+    
+        # Create temporary holder session
+        session <- list()     
+        
+        ###################################
+        # META
+        ###################################
+        session$meta <- data.frame(
+            subj_id    = subjects_in_file[i],
+            box        = boxes_in_file[i],
+            date       = dates_in_file[i],
+            start_time = start_times_in_file[i],
+            database   = databases_in_file[i],
+            day_table  = day_tables_in_file[i]
+        )
+        
+        ###################################
+        # TRIALS
+        ###################################
+            
+        # Extract numeric values from the session's trials
+        # TODO: Check compatibility vs. each file type
+        # The idea is that this should be fully generic!
+        trials_as_list <-
+            sapply(X = str_split(as_lines[pos_starts[i]:pos_ends[i]],
+                                 pattern = ','),
+                   FUN = as.numeric)
+        
+        # TODO: Check if this is functional or redundant legacy
+        # Change to a list, for older style data - check if works for newer!
+        if (typeof(trials_as_list) == 'double') {
+            trials_as_list <- lapply(seq_len(ncol(trials_as_list)),
+                                     function(i) {
+                                         trials_as_list[, i]
+                                         })
+        }
+    
+        # Extract the numeric values for the list
+        # - note we ignore the "start" trial
+        for (j in 1:length(trials_as_list[])) {
+            
+            # Set up empty data frame
+            if (j == 1) trials <- data.frame()
+            
+            # Add the line from the list to the data frame
+            # --- as long as it conta data
+            if (trials_as_list[[j]][1] != -800) {
+                trials <- rbind(trials, trials_as_list[[j]])
+                
+                # Update the names of the columns
+                if (j == length(trials_as_list)) {
+                  names(trials) <- paste0("c", 1:dim(trials)[2])
+                  }
+            }
+            
+            
+            
+        }
+        
+        # Add to session
+        session$trials <- trials
+
+        ###################################
+        # ACTIVITY LOG
+        ###################################
+        
+        # TODO: Sort out activity log
+        session$activity_log <- NA
+    
+        # Current session data filed into the list of sessions
+        sessions[[paste0(subjects_in_file[i], '_',
+                         boxes_in_file[i], '_',
+                         dates_in_file[i], '_',
+                         start_times_in_file[i])]] <- session
+        
+    }
+
+    
+}
+
+##All the trials data from all the sessions covered in files_to_analyse are now neatly stored in the large list object "sessions". Here, each item in the list is another list, named with the subject ID + box + date + time.
+
+# How many sessions in total?
+length(sessions)
+
+# Example names of list items 
+names(sessions)[1:10]
+
+# Each list item is a list with meta ...
+sessions[[1]]$meta
+
+# ... trials
+head(sessions[[1]]$trials)
+
+#head(sessions)
+# ... and ACTIVITY LOG (just not yet)
+
+#This means we can now start sorting through the sessions and extract the data that we are actually interested in.
+# Filters based on your current experiment
+# mice_to_analyse <- 1:24
+#mice_to_analyse <- 1:24
+
+mk801_007_coh1<-c(2,3,8,10,11,12,14,16,17,18,19,21)
+recent_data<-c(1:24)
+
+mice_to_analyse<-get(experiment)
+
+databases_to_analyse <- c('Probabilistsic Reversal',
+                          'Probabilistic Reversal')
+
+possible_day_tables<- c(
+                            'Nosepoke Active 100',
+                           'Reversal Training 6-out-of-6',
+                          '[must initiate] Reversal Training 6-out-of-6',
+                          '[no initiate] Reversal Training 6-out-of-6',
+                          '[must initiate] PRL 6-out-of-6',
+                          '[no initiate] PRL 6-out-of-6',
+                          '[must initiate] Reversal Training 6 of 6',
+                          '[no initiate] Reversal Training 6 of 6',
+                          '[must initiate] Probabilistic Reversal 6 of 6',
+                          '[no initiate] Probabilistic Reversal 6 of 6')
+
+
+if (experiment=="recent_data"){
+  day_tables_to_analyse<-possible_day_tables
+} else {
+  
+  day_tables_to_analyse <- c('[must initiate] PRL 6-out-of-6',
+                          '[no initiate] PRL 6-out-of-6',
+                          '[must initiate] Probabilistic Reversal 6 of 6',
+                          '[no initiate] Probabilistic Reversal 6 of 6')
+  }
+
+
+
+sessions_to_analyse <- list()
+
+
+
+
+for (i in 1:length(sessions)) {
+    
+    # Filter the relevant sessions
+    if ((sessions[[i]]$meta$subj_id %in% mice_to_analyse) &&
+        (sessions[[i]]$meta$database %in% databases_to_analyse) &&
+        (sessions[[i]]$meta$day_table %in% day_tables_to_analyse)) {
+        
+            # Add session to sessions_to_analyse
+            sessions_to_analyse[[names(sessions)[i]]] <- sessions[[i]]
+        }
+}
+
+length(sessions_to_analyse)
+
+# There are still some steps to go, but these will now be specific for a) each task and b) the version of the K-Limbic output. In either case, we will want to loop through the sessions to read in the relevant information as trials.
+
+###################################
+# PRL task
+###################################
+
+# Different versions of K-Limbic have different number
+# of columns in the output - we can use this information
+# to correctly extract the responses!
+
+
+for (i in 1:length(sessions_to_analyse)) {
+    
+    if (i == 1) df_reversal <- data.frame()
+    
+    # Trim the last trial, if no choice was made
+    sessions_to_analyse[[i]]$trials <-
+        sessions_to_analyse[[i]]$trials %>% filter(!c2 %in% c(128, 150))
+    
+    # Which format are we looking at?
+    n_col <- dim(sessions_to_analyse[[i]]$trials)[2]
+
+    # Pre-glitch-fix (before mid April)
+    # Appears as either 59 or 60?
+    # TODO: confirm when different number of columns
+    if (n_col %in% c(59,60)) {
+        df_trials <- cross_join(sessions_to_analyse[[i]]$meta,
+                                sessions_to_analyse[[i]]$trials) %>%
+            mutate(trial = c1 + 1,
+                   chose_left = c38 + c43,
+                   chose_right = c39 + c44,
+                   reward = c47,
+                   left_is_active = as.numeric(c35 > c41),
+                   chose_optimal = as.numeric(chose_left == left_is_active),
+                   reward_latency = c46 - c45,
+                   response_latency = c31 - c30 + c26 - c25,
+                   initiate_latency = NA) %>%
+            # Select the columns to carry forward - we drop all the columns
+            # with raw data from K-Limbic at this point
+            dplyr::select(subj_id, box, date, start_time, database, day_table,
+                          trial, chose_left, chose_right, reward,
+                          left_is_active, chose_optimal,
+                          reward_latency, response_latency, initiate_latency)
+    }
+    
+    # This filter might need more conditions
+    if (n_col %in% c(64,65)) {
+        df_trials <- cross_join(sessions_to_analyse[[i]]$meta,
+                                sessions_to_analyse[[i]]$trials) %>%
+            mutate(trial = c1 + 1,
+                   chose_left = c43 + c48, # Correct 15th April #2
+                   chose_right = c44 + c49, # Correct 15th April #2
+                   reward = c52,
+                   left_is_active = as.numeric(c40 > c45), # Correct 15th April #2
+                   chose_optimal = as.numeric(chose_left == left_is_active),
+                   reward_latency = c51 - c50,
+                   response_latency = c36 - c35 + c31- c30,
+                   initiate_latency = NA) %>%
+            # Select the columns to carry forward - we drop all the columns
+            # with raw data from K-Limbic at this point
+            dplyr::select(subj_id, box, date, start_time, database, day_table,
+                          trial, chose_left, chose_right, reward,
+                          left_is_active, chose_optimal,
+                          reward_latency, response_latency, initiate_latency)
+    }
+    
+    df_reversal <-  rbind(df_reversal, df_trials)
+    
+}
+
+
+# POSTHOC CALCULATIONS OF ADDITIONAL VARIABLES FROM THE REVERSAL DATA
+for (t in 1:dim(df_reversal)[1]) {
+    
+    # New columns, all filled with NA
+    if (t == 1) {
+        df_reversal$stay <- NA
+        df_reversal$win_stay <- NA
+        df_reversal$lose_shift <- NA
+        df_reversal$towards_criterion <- NA
+        df_reversal$crits <- NA
+    }
+    
+    # All these variables are zero on the first trial of the session
+    if (df_reversal$trial[t] == 1) {
+        
+        df_reversal$win_stay[t] <- 0
+        df_reversal$lose_shift[t] <- 0
+        df_reversal$stay[t] <- 0
+        df_reversal$towards_criterion[t] <- df_reversal$chose_optimal[t]
+        df_reversal$crits[t] <- 0
+        
+    } else if (df_reversal$trial[t] > 1) {
+        
+        # Stay (regardless of previous outcome)
+        df_reversal$stay[t] <- 
+            df_reversal$chose_left[t-1] == df_reversal$chose_left[t]
+        
+        # Win-stay behaviour
+        df_reversal$win_stay[t] <- 
+            df_reversal$reward[t-1] * df_reversal$stay[t]
+        
+        # Lose-shift behaviour
+        df_reversal$lose_shift[t] <-
+            (1 - df_reversal$reward[t-1]) * (1 - df_reversal$stay[t])
+        
+        # Towards criterion
+        df_reversal$towards_criterion[t] <-
+            if_else(condition = df_reversal$towards_criterion[t - 1] == 6,
+                    true = df_reversal$chose_optimal[t],
+                    false = if_else(df_reversal$chose_optimal[t] == 1,
+                                    true = df_reversal$towards_criterion[t-1]+1,
+                                    false = 0)
+                    )
+        
+        df_reversal$crits[t] <- df_reversal$crits[t-1] +
+                                (df_reversal$towards_criterion[t - 1] == 6)
+        
+    }
+    
+}
+
+write_csv(x = df_reversal,
+          file = file.path(OUTPUT_DIR,
+                           paste0('df_reversal_',
+                                  experiment,
+                                  '.csv')
+                           )
+          )
+
+```
+
+#3.2 Load raw data back into environment
+
+```{r}
+df_reversal<-read.csv(paste0(OUTPUT_DIR,"/df_reversal_",experiment,".csv"))
+```
+
+##4.0 DATA SUMMARY & LABELLING ##4.1. Summarise data & save
+
+```{r}
+# This needs to be updated for the actual names of the schedules
+summary_reversal <- 
+    df_reversal %>%
+    group_by(subj_id,
+             day_table,
+             date,
+             start_time) %>%
+    summarise(trials = n(),
+              rewards = sum(reward == 1),
+              accuracy = mean(chose_optimal,
+                              na.rm = TRUE),
+              win_stay_prop = sum(win_stay)/sum(reward==1),
+              lose_shift_prop = sum(lose_shift)/sum(reward==0),
+              stay = mean(stay, na.rm = TRUE),
+              reversals = sum(towards_criterion == 6),
+              rev_per_100 = reversals/trials*100,
+              trials_per_rev = trials/(reversals + 1)) %>%
+    mutate(sex = if_else(subj_id %in% c(1:12),
+                         true = 'female',
+                         false = 'male')) %>%
+    # The following code copes with the various incarnations of the task names
+    mutate(day_table = factor(
+                  day_table,
+                  levels = c('[no initiate] Reversal Training 6-out-of-6',
+                             '[no initiate] PRL 6-out-of-6',
+                             'Reversal Training 6-out-of-6',
+                             '[must initiate] Reversal Training 6-out-of-6',
+                             '[must initiate] PRL 6-out-of-6',
+                             '[must initiate] Reversal Training 6 of 6',
+                             '[no initiate] Reversal Training 6 of 6',
+                             '[must initiate] Probabilistic Reversal 6 of 6',
+                             '[no initiate] Probabilistic Reversal 6 of 6'),
+                  labels = c('[no init] Rev Train 6/6',
+                             '[no init] PRL 6/6',
+                             '[must init] Rev Train 6/6',
+                             '[must init] Rev Train 6/6',
+                             '[must init] PRL 6/6',
+                             '[must init] Rev Train 6/6',
+                             '[no init] Rev Train 6/6',
+                             '[must init] PRL 6/6',
+                             '[no init] PRL 6/6')
+                          ))
+
+
+write_csv(x = summary_reversal,
+          file = file.path(OUTPUT_DIR,
+                           paste0('summary_reversal_',
+                                  experiment,
+                                  '.csv')
+                           )
+          )
+
+```
+
+##4.2 Load processed data back into environment
+
+```{r}
+summary_reversal<-read.csv(paste0(OUTPUT_DIR,"/summary_reversal_",experiment,".csv"))
+```
+
+##4.3. Update Dose Information to csv
+
+```{r}
+#experiment<-"mk801_007_coh1"
+
+if (!experiment=="recent_data"){
+ doses<-read.csv(paste0(experiment,".csv"))
+
+dates<-doses[1,1:3]
+
+# |>
+#   pivot_longer(1:3,
+#                names_to = "Day",
+#                values_to = "date")
+
+
+
+doses<-doses[-1,]|>
+  pivot_longer(cols = 4:7,
+               values_to = "subj_id")|>
+  select(-4)|>
+  pivot_longer(cols=1:3,
+               names_to = "date",
+               values_to = "dose")|>
+  mutate(date=recode(date,
+                     Day1=dates$Day1,
+                     Day2=dates$Day2,
+                     Day3=dates$Day3),
+         dose=recode(dose,
+                     A="Saline",
+                     B="0.1",
+                     C="0.05"))|>
+  mutate(date=as.Date(date,format = "%d/%m/%Y"))
+
+
+
+
+coh_01_007<-c(2,3,8,10,11,12,14,16,17,18,19,21)
+
+
+for (i in 1:dim(doses)[1]){
+  if (!doses$subj_id[i] %in% coh_01_007){
+    doses$dose[i]<-NA
+  }
+}
+
+extra<-read.csv(paste0(experiment,"_extra.csv"))
+
+extra<-extra|>
+  mutate(date=as.Date(date,format = "%d/%m/%Y"),
+         dose=recode(dose,
+                     A="Saline",
+                     B="0.1",
+                     C="0.05"))
+
+#############USE LEFT JOIN FOR THIS
+for (i in 1:dim(extra)[1]) {
+  
+  extra_mouse<-filter(doses,
+               dose==extra$dose[i],
+               subj_id==extra$subj_id[i])
+  
+  extra_mouse$dose<-NA
+  
+  doses<-filter(doses,
+         !(dose==extra$dose[i] &
+             subj_id==extra$subj_id[i]))
+  
+  doses<-bind_rows(doses,extra_mouse)
+  
+}
+
+doses<-bind_rows(doses,extra)
+
+#get rid of cohort 2 or partial dose days
+doses<-filter(doses,
+       !is.na(dose))
+
+write_csv(x = doses,
+          file = file.path(OUTPUT_DIR,
+                           paste0(experiment,
+                                  '_doses.csv')
+          )
+) 
+}
+
+```
+
+##4.4. Assign doses to raw data & update data file
+
+```{r}
+if (!experiment=="recent_data"){#OUTPUT_DIR<-"Cohort 2/Processed Data"
+#see which data/ doses you have
+list.files(OUTPUT_DIR)
+
+#get data you want to assign doses to
+prl_data<-read.csv(paste0(OUTPUT_DIR,"/summary_reversal_",experiment,".csv"))
+#get doses
+doses<-read.csv(paste0(OUTPUT_DIR,"/",experiment,"_doses.csv"))
+
+#make sure dates are in the same format, this might need tweaking depending on
+#input
+prl_data$date<-as.Date(dmy(prl_data$date))
+doses$date<-as.Date(doses$date)
+
+# doses$date<-dmy(doses$date)
+
+prl_data<-left_join(x = prl_data,
+          y=doses,
+          by=c("date","subj_id"))
+
+write_csv(x = summary_reversal,
+          file = file.path(OUTPUT_DIR,
+                           paste0('summary_reversal_',
+                                  experiment,
+                                  '.csv')
+                           )
+)
+}
+
+
+
+```
+
+##5.0.  Plot Data
+
+#5.1 Experimental Dose Response
+
+```{r}
+
+prl_data<-filter(prl_data,
+                         !is.na(dose))
+
+prl_data$dose<-factor(prl_data$dose,levels = c("Saline","0.05","0.1"),labels = c("Saline","0.05","0.1"))
+
+prl_data$subj_id<-factor(prl_data$subj_id)
+
+
+prl_data|>
+  ggplot(aes(x=dose,y=lose_shift_prop))+
+  geom_boxplot()+
+  facet_grid(~day_table)+
+  geom_point(aes(group=subj_id,colour=subj_id))+
+  geom_line(aes(group=subj_id,colour=subj_id))
+
+```
+##5.2 Recent Data
+```{r}
+
+summary_reversal$date<-dmy(summary_reversal$date)
+mk801_007_coh1<-c(2,3,8,10,11,12,14,16,17,18,19,21)
+summary_reversal$cohort<-NA
+
+
+for (i in 1:dim(summary_reversal)[1]){
+  if (summary_reversal$subj_id[i] %in% mk801_007_coh1){
+    summary_reversal$cohort[i]<-"Cohort1"
+  } else {summary_reversal$cohort[i]<-"Cohort2"}
+}
+
+param<-"win_stay_prop"
+summary_reversal|>
+  filter(cohort=="Cohort2",
+         date>"2026-06-01")|>
+  ggplot(aes(x=date,y=get(param),group = subj_id,colour = as.factor(subj_id)))+
+  facet_grid(cohort~day_table)+
+  scale_y_continuous(limits = c(0, 1))  +  # <--- inverted x axis with "day_table_sessions_ago"
+  geom_hline(yintercept = c(0.5, 0.8),
+             linetype = 'dashed',
+             colour = 'magenta',
+             linewidth = 0.5)+  # <--- inverted x axis with "day_table_sessions_ago"
+  geom_hline(yintercept = c(0.7),
+             linetype = 'dashed',
+             colour = 'blue',
+             linewidth = 0.5) +
+  theme_bw()  +
+  theme(legend.position = 'right',
+        legend.direction = 'vertical') +
+  labs(title = 'Reversal training in BJA007 mice')+
+  geom_line(aes(y = get(param))) +
+  geom_point(aes(y = get(param)), alpha = 0.2, size = 3)+
+  ylab(paste0(param))
+
+
+```
+
+
+
+8.  Analyse Data
