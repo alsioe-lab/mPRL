@@ -11,7 +11,7 @@ editor: visual
 #| echo: false
 
 
-# rm(list=ls())
+rm(list=ls())
 library(tidyverse)
 library(cowplot)
 
@@ -21,8 +21,8 @@ library(cowplot)
 # DATA_DIR <- file.path('Z:/',
 #                       'K-Limbic'
 #                       )
-
-
+#DRIVE PATH: \\rdsfcifs.acrc.bris.ac.uk
+DATA_DIR<-"\\rdsfcifs.acrc.bris.ac.uk/K-Limbic"
 DATA_DIR <- file.path('Z:/',
                       'K-Limbic')
 
@@ -31,19 +31,24 @@ OUTPUT_DIR <- file.path('Cohort 2/',
                         'Processed Data')
 ```
 
+------------------------------------------------------------------------
+
 ##2. SELECT FILES AND MICE
 
 ##2.1 SELECT EXPERIMENT
+
 ```{r}
 
 # TODO: this needs to be interactive at some point
 
 #decide experiment
 experiment<-"mk801_007_coh1"
+experiment<-"mk801_007_comb"
 experiment<-"recent_data"
 ```
 
 ##2.2 FILES/MICE
+
 ```{r}
 #| label: select files
 #| echo: false
@@ -61,6 +66,14 @@ mk801_007_coh1_files<-c('22-Apr-2026_Combined.csv',
                         '28-Apr-2026_Combined.csv',
                         '01-May-2026_Combined.csv',
                         '06-May-2026_Combined.csv')
+
+mk801_007_comb_files<-c('22-Apr-2026_Combined.csv',
+                        '28-Apr-2026_Combined.csv',
+                        '01-May-2026_Combined.csv',
+                        '06-May-2026_Combined.csv',
+                        '25-Jun-2026_Combined.csv',
+                        '30-Jun-2026_Combined.csv',
+                        '03-Jul2026_Combined.csv')
 
 files_to_analyse <- c(get(paste0(experiment,"_files")))
 ```
@@ -257,6 +270,7 @@ head(sessions[[1]]$trials)
 
 mk801_007_coh1<-c(2,3,8,10,11,12,14,16,17,18,19,21)
 recent_data<-c(1:24)
+mk801_007_comb<-c(1:24)
 
 mice_to_analyse<-get(experiment)
 
@@ -429,6 +443,16 @@ for (t in 1:dim(df_reversal)[1]) {
     
 }
 
+df_reversal$reversal<-NA
+
+for (d in 1:dim(df_reversal)[1]){
+  if ((d==1)|df_reversal$trial[d]==1){
+    df_reversal$reversal[d]<-1
+  } else if (df_reversal$towards_criterion[d-1]==6){
+    df_reversal$reversal[d]<-df_reversal$reversal[d-1]+1
+  } else {df_reversal$reversal[d]<-df_reversal$reversal[d-1]}
+}
+
 write_csv(x = df_reversal,
           file = file.path(OUTPUT_DIR,
                            paste0('df_reversal_',
@@ -513,46 +537,84 @@ summary_reversal<-read.csv(paste0(OUTPUT_DIR,"/summary_reversal_",experiment,".c
 ```{r}
 #experiment<-"mk801_007_coh1"
 
+
 if (!experiment=="recent_data"){
- doses<-read.csv(paste0(experiment,".csv"))
-
-dates<-doses[1,1:3]
-
-# |>
-#   pivot_longer(1:3,
-#                names_to = "Day",
-#                values_to = "date")
+ 
+  doses<-read.csv(paste0(experiment,".csv"))
+  coh_01_007<-c(2,3,8,10,11,12,14,16,17,18,19,21)
+  coh_02_007<-c(5,6,9,13,22,23,24)
 
 
-
-doses<-doses[-1,]|>
-  pivot_longer(cols = 4:7,
-               values_to = "subj_id")|>
-  select(-4)|>
-  pivot_longer(cols=1:3,
-               names_to = "date",
-               values_to = "dose")|>
-  mutate(date=recode(date,
-                     Day1=dates$Day1,
-                     Day2=dates$Day2,
-                     Day3=dates$Day3),
-         dose=recode(dose,
-                     A="Saline",
-                     B="0.1",
-                     C="0.05"))|>
+###if just doing cohort 1, can probably use both cohort file for this but
+  #sort later
+  if (experiment=="mk801_007_coh1"){
+    
+    dates<-doses[1,1:3]
+    doses<-doses[-1,]|>
+      pivot_longer(cols = 4:7,
+                   values_to = "subj_id")|>
+      select(-4)|>
+      pivot_longer(cols=1:3,
+                   names_to = "date",
+                   values_to = "dose")|>
+      mutate(date=recode(date,
+                         Day1=dates$Day1,
+                         Day2=dates$Day2,
+                         Day3=dates$Day3),
+             dose=recode(dose,
+                         A="Saline",
+                         B="0.1",
+                         C="0.05"))|>
+      mutate(date=as.Date(date,format = "%d/%m/%Y"))
+    
+    
+    for (i in 1:dim(doses)[1]){
+      if (!doses$subj_id[i] %in% coh_01_007){
+        doses$dose[i]<-NA
+      }
+    }
+    } #END JUST COHORT1
+  
+  if (experiment=="mk801_007_comb"){
+    
+    dates<-doses[1:2,1:3]
+    doses<-doses[-(1:2),]|>
+    pivot_longer(cols = 4:7,
+                 values_to = "subj_id")|>
+    select(-4)|>
+    pivot_longer(cols=1:3,
+                 names_to = "date",
+                 values_to = "dose")|>
+    mutate(date=ifelse(subj_id %in% coh_01_007,
+                       recode(date,
+                              Day1=dates$Day1[1],
+                              Day2=dates$Day2[1],
+                              Day3=dates$Day3[1]),
+                       recode(date,
+                              Day1=dates$Day1[2],
+                              Day2=dates$Day2[2],
+                              Day3=dates$Day3[2])),
+           dose=recode(dose,
+                       A="Saline",
+                       B="0.1",
+                       C="0.05"))|>
   mutate(date=as.Date(date,format = "%d/%m/%Y"))
 
+  # extra<-read.csv(paste0(experiment,"_extra.csv"))
+  # 
+  # extra<-extra|>
+  #   mutate(date=as.Date(date,format = "%d/%m/%Y"),
+  #          dose=recode(dose,
+  #                      A="Saline",
+  #                      B="0.1",
+  #                      C="0.05"))
+  
+  
+  } #end cohort 2
+  
+  
+  
 
-
-
-coh_01_007<-c(2,3,8,10,11,12,14,16,17,18,19,21)
-
-
-for (i in 1:dim(doses)[1]){
-  if (!doses$subj_id[i] %in% coh_01_007){
-    doses$dose[i]<-NA
-  }
-}
 
 extra<-read.csv(paste0(experiment,"_extra.csv"))
 
@@ -582,9 +644,15 @@ for (i in 1:dim(extra)[1]) {
 
 doses<-bind_rows(doses,extra)
 
-#get rid of cohort 2 or partial dose days
-doses<-filter(doses,
-       !is.na(dose))
+#get rid of NAs: partial dose days or cohort 2 if excluding
+doses<-doses|>
+  filter(subj_id %in% c(coh_01_007,coh_02_007),
+         !is.na(dose))
+
+doses<-doses|>
+  mutate(cohort=ifelse(subj_id %in% coh_01_007,
+                         "Cohort1",
+                         "Cohort2"))
 
 write_csv(x = doses,
           file = file.path(OUTPUT_DIR,
@@ -605,12 +673,16 @@ list.files(OUTPUT_DIR)
 
 #get data you want to assign doses to
 prl_data<-read.csv(paste0(OUTPUT_DIR,"/summary_reversal_",experiment,".csv"))
+df_reversal<-read.csv(paste0(OUTPUT_DIR,"/df_reversal_",experiment,".csv"))
+
+
 #get doses
 doses<-read.csv(paste0(OUTPUT_DIR,"/",experiment,"_doses.csv"))
 
 #make sure dates are in the same format, this might need tweaking depending on
 #input
 prl_data$date<-as.Date(dmy(prl_data$date))
+df_reversal$date<-as.Date(dmy(df_reversal$date))
 doses$date<-as.Date(doses$date)
 
 # doses$date<-dmy(doses$date)
@@ -619,7 +691,25 @@ prl_data<-left_join(x = prl_data,
           y=doses,
           by=c("date","subj_id"))
 
-write_csv(x = summary_reversal,
+prl_data<-prl_data|>
+  filter(!is.na(dose))
+
+# df_reversal<-left_join(x = df_reversal,
+#           y=doses,
+#           by=c("date","subj_id"))
+# 
+# df_reversal<-filter(df_reversal,
+#                  !is.na(dose))
+
+write_csv(x = df_reversal,
+          file = file.path(OUTPUT_DIR,
+                           paste0('df_reversal_',
+                                  experiment,
+                                  '.csv')
+                           )
+)
+
+write_csv(x = prl_data,
           file = file.path(OUTPUT_DIR,
                            paste0('summary_reversal_',
                                   experiment,
@@ -631,30 +721,228 @@ write_csv(x = summary_reversal,
 
 
 ```
+###4.5 Trials per reversal
+```{r}
+df_reversal<-read.csv(paste0(OUTPUT_DIR,"/df_reversal_",experiment,".csv"))
 
-##5.0.  Plot Data
+#If reversals hasn't been added:
+df_reversal$reversal<-NA
 
-#5.1 Experimental Dose Response
+for (d in 1:dim(df_reversal)[1]){
+  if ((d==1)|df_reversal$trial[d]==1){
+    df_reversal$reversal[d]<-1
+  } else if (df_reversal$towards_criterion[d-1]==6){
+    df_reversal$reversal[d]<-df_reversal$reversal[d-1]+1
+  } else {df_reversal$reversal[d]<-df_reversal$reversal[d-1]}
+}
+
+#assign doses to raw data
+doses<-read.csv(paste0(OUTPUT_DIR,"/",experiment,"_doses.csv"))
+
+
+df_reversal<-left_join(x = df_reversal,
+          y=doses,
+          by=c("date","subj_id"))
+
+df_reversal<-filter(df_reversal,
+                 !is.na(dose))
+
+prl_by_rev<-trials_per_rev|>
+  group_by(subj_id,date,dose,reversal,day_table)|>
+  summarise(crits=sum(towards_criterion==6),
+            trials=max(trial),
+            crit_per_100=((sum(towards_criterion==6))/max(trial))*100,
+            win_stay_prob=(sum(win_stay==1))/sum(reward==1),
+            lose_shift_prob=sum(lose_shift==1)/sum(reward==0),
+            percent_chose_left=(sum(chose_left==1)/max(trial))*100,
+            accuracy=(sum(chose_optimal)/max(trial))*100,#
+            n_trials=max(trial),
+            trials_to_rev=n()
+  )|>mutate(day_table = factor(
+                  day_table,
+                  levels = c("[must initiate] Probabilistic Reversal 6 of 6",
+                             "[no initiate] Probabilistic Reversal 6 of 6" ),
+                  labels = c('Must Initiate',
+                             'No Initiate')))
+
+write_csv(x = df_reversal,
+          file = file.path(OUTPUT_DIR,
+                           paste0('trials_per_rev_',
+                                  experiment,
+                                  '.csv')
+                           )
+)
+
+write_csv(x = prl_by_rev,
+          file = file.path(OUTPUT_DIR,
+                           paste0('trials_per_rev_processed',
+                                  experiment,
+                                  '.csv')
+                           )
+)
+
+
+#trials_per_rev<-read.csv(paste0(OUTPUT_DIR,"/trials_per_rev_",experiment,".csv"))
+#prl_by_rev<-read.csv(paste0(OUTPUT_DIR,"/trials_per_rev_processed",experiment,".csv"))
+```
+
+
+#5.0. Plot Data
+
+###5.1 Load processed data back into environment
 
 ```{r}
+summary_reversal<-read.csv(paste0(OUTPUT_DIR,"/summary_reversal_",experiment,".csv"))
+```
 
-prl_data<-filter(prl_data,
-                         !is.na(dose))
+###5.2 Quick: Experimental Dose Response
 
-prl_data$dose<-factor(prl_data$dose,levels = c("Saline","0.05","0.1"),labels = c("Saline","0.05","0.1"))
+```{r}
+prl_data<-summary_reversal
+
+
+prl_data$dose<-factor(prl_data$dose,levels = c("Saline","0.05","0.1"),labels = c("Saline","0.05mg/kg","0.1mg/kg"))
 
 prl_data$subj_id<-factor(prl_data$subj_id)
 
+names(prl_data)
+param<-"rev_per_100"
+
+prl_data|>
+  ggplot(aes(x=dose,y=get(param)))+
+  geom_boxplot()+
+  facet_grid(cohort~day_table)+
+  geom_point(aes(group=subj_id,colour=subj_id))+
+  geom_line(aes(group=subj_id,colour=subj_id))+
+  ylab(paste0(param))
 
 prl_data|>
   ggplot(aes(x=dose,y=lose_shift_prop))+
   geom_boxplot()+
-  facet_grid(~day_table)+
+  facet_grid(.~day_table)+
   geom_point(aes(group=subj_id,colour=subj_id))+
-  geom_line(aes(group=subj_id,colour=subj_id))
+  geom_line(aes(group=subj_id,colour=subj_id))+
+  ylab(paste0("win_stay_prop"))
+
+prl_data|>
+  ggplot(aes(x=dose,y=trials))+
+  geom_boxplot()+
+  facet_grid(cohort~day_table)+
+  geom_point(aes(group=subj_id,colour=subj_id))+
+  geom_line(aes(group=subj_id,colour=subj_id))+
+  ylab(paste0("trials"))
+
+prl_data|>
+  ggplot(aes(x=lose_shift_prop,y=reversals))+
+  geom_point()+
+  facet_grid(.~dose)+
+  geom_smooth()
 
 ```
-##5.2 Recent Data
+
+###5.3 Formatted: Experimental Dose Respose
+
+```{r}
+prl_data<-summary_reversal
+prl_data$dose<-factor(prl_data$dose,levels = c("Saline","0.05","0.1"),labels = c("Saline","0.05mg/kg","0.1mg/kg"))
+prl_data$subj_id<-factor(prl_data$subj_id)
+prl_data<-prl_data|>
+  mutate(day_table = factor(
+                  day_table,
+                  levels = c("[must init] PRL 6/6",
+                             "[no init] PRL 6/6" ),
+                  labels = c('Must Initiate',
+                             'No Initiate')))
+
+names(prl_data)
+variable<-"lose_shift_prop"
+variable<-"rev_per_100"
+if (variable=="lose_shift_prop"){
+  variable_label<-"Lose-Shift Probability"}
+
+if (variable=="rev_per_100"){
+  variable_label<-"Reversals per 100 Trials"
+}
+
+
+
+
+plot<-
+    prl_data|>
+    ggplot(mapping=aes(x=dose,
+                       y=get(variable)))+
+    geom_boxplot(aes(fill=as.factor(dose)),
+                 lwd=1,
+                 fatten =1,)+
+    geom_line(mapping=aes(x=dose,
+                          y=get(variable),
+                          group=subj_id),
+              colour="grey",
+              alpha=0.5,
+              lwd=1)+
+    geom_point(mapping = aes(x=dose,
+                             y=get(variable),
+                             alpha=0.5),
+               colour="grey")+
+  #  scale_x_continuous(labels=doses, breaks=1:length(doses))+
+    xlab("Dose")+
+  ylab(paste0(variable_label))+
+    guides(fill="none")+
+    theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank(),
+          #panel.background = element_rect(fill='#EBEBEB'),
+          #text=element_text(family="Aptos"),
+          #plot.background = element_rect(fill='transparent', colour=NA),
+          axis.line = element_line(colour = "black"),
+          axis.text.x=element_text(size=20, face="bold",angle=45,colour="black",vjust = 1,hjust = 1),
+          axis.text.y=element_text(size=20, face="bold",angle=45,colour="black"),
+          axis.title.x = element_text(size=20,face="bold",colour="black"),
+          axis.title.y = element_text(size=20,face="bold",colour="black"),
+          legend.title = element_text(size = 16,face="bold"),
+          legend.text = element_text(size=20),
+          legend.position="none",
+          strip.text.x = element_text(size=20)
+    )+
+      scale_fill_manual(values=c('#C3D69B','#B3A2C7','#FFC000'))+
+  facet_grid(.~day_table)
+
+if (variable=="rev_per_100"){
+  plot<-plot+
+    scale_y_continuous(breaks = seq(0,9,1),
+                       minor_breaks = 1,
+                       limits=c(0,9))
+  }
+
+plot
+#facet
+#bw<-6.75
+#bh<-16
+
+# bw<-12
+# bh<-28.4
+# 
+# bw<-13
+bh<-16
+bw<-23.5
+
+#single
+#bh<-16
+#bw<-12
+
+
+plot
+ cowplot::save_plot(filename=paste0('Figures/Essay_YR3/',experiment,'/',Sys.Date(),'/',variable,".png"),
+                     plot=plot,
+                     #bg="transparent,
+                     units="cm",
+                     base_height =bh,
+                     base_width=bw)
+plot
+```
+
+###5.3 Recent Data
+
 ```{r}
 
 summary_reversal$date<-dmy(summary_reversal$date)
@@ -671,9 +959,13 @@ for (i in 1:dim(summary_reversal)[1]){
 param<-"win_stay_prop"
 summary_reversal|>
   filter(cohort=="Cohort2",
-         date>"2026-06-01")|>
+         !day_table=="[must init] Rev Train 6/6",
+         #day_table=="[must init] PRL 6/6",
+         date>"2026-06-01"
+         )|>
   ggplot(aes(x=date,y=get(param),group = subj_id,colour = as.factor(subj_id)))+
-  facet_grid(cohort~day_table)+
+  #facet_grid(cohort~day_table)+
+  facet_grid(day_table~subj_id)+
   scale_y_continuous(limits = c(0, 1))  +  # <--- inverted x axis with "day_table_sessions_ago"
   geom_hline(yintercept = c(0.5, 0.8),
              linetype = 'dashed',
@@ -694,6 +986,517 @@ summary_reversal|>
 
 ```
 
+###5.4 Trials per reversal
+
+```{r}
+###PLot median trials to critetia per reversal
+# 
+# df_reversal<-read.csv(paste0(OUTPUT_DIR,"/df_reversal_",experiment,".csv"))
+# 
+# #If reversals hasn't been added:
+# df_reversal$reversal<-NA
+# 
+# for (d in 1:dim(df_reversal)[1]){
+#   if ((d==1)|df_reversal$trial[d]==1){
+#     df_reversal$reversal[d]<-1
+#   } else if (df_reversal$towards_criterion[d-1]==6){
+#     df_reversal$reversal[d]<-df_reversal$reversal[d-1]+1
+#   } else {df_reversal$reversal[d]<-df_reversal$reversal[d-1]}
+# }
+# 
+# #assign doses to raw data
+# doses<-read.csv(paste0(OUTPUT_DIR,"/",experiment,"_doses.csv"))
+# 
+# 
+# df_reversal<-left_join(x = df_reversal,
+#           y=doses,
+#           by=c("date","subj_id"))
+# 
+# df_reversal<-filter(df_reversal,
+#                  !is.na(dose))
+# 
+# trials_per_rev<-read.csv(paste0(OUTPUT_DIR,"/trials_per_rev_",experiment,".csv"))
+# 
+# 
+# df_reversal$dose<-factor(df_reversal$dose,levels =c("Saline","0.05","0.1"),labels = c("Saline","0.05mg/kg","0.1mg/kg") )
+
+#saveit<-prl_by_rev
+
+# prl_by_rev<-trials_per_rev|>
+#   group_by(subj_id,date,dose,reversal,day_table)|>
+#   summarise(crits=sum(towards_criterion==6),
+#             trials=max(trial),
+#             crit_per_100=((sum(towards_criterion==6))/max(trial))*100,
+#             win_stay_prob=(sum(win_stay==1))/sum(reward==1),
+#             lose_shift_prob=sum(lose_shift==1)/sum(reward==0),
+#             percent_chose_left=(sum(chose_left==1)/max(trial))*100,
+#             accuracy=(sum(chose_optimal)/max(trial))*100,#
+#             n_trials=max(trial),
+#             trials_to_rev=n()
+#   )|>mutate(day_table = factor(
+#                   day_table,
+#                   levels = c("[must initiate] Probabilistic Reversal 6 of 6",
+#                              "[no initiate] Probabilistic Reversal 6 of 6" ),
+#                   labels = c('Must Initiate',
+#                              'No Initiate')))
+
+#prl_by_rev$day_table
+# #prl_by_rev2<-prl_by_rev
+# #remoove outliers?
+# #create unique labels to delete columns
+# prl_by_rev$lab<-1:dim(prl_by_rev)[1]
+# #run identify outliers
+# test<-(prl_by_rev|>
+#          group_by(dose,day_table)|>
+#          identify_outliers(trials_to_rev))
+# #subset extreme outliers
+# test<-subset(test,is.extreme==TRUE)
+# #remove outliers
+# prl_by_rev <- subset(prl_by_rev, (!lab %in% test$lab))
+# #remove identifying column
+# prl_by_rev<-
+#   prl_by_rev|>
+#   select(-lab)
+prl_by_rev<-read.csv(paste0(OUTPUT_DIR,"/trials_per_rev_processed",experiment,".csv"))
+prl_by_rev$dose<-factor(prl_by_rev$dose,levels =c("Saline","0.05","0.1"),labels = c("Saline","0.05mg/kg","0.1mg/kg") )
 
 
-8.  Analyse Data
+m_prl_sum<-prl_by_rev|>
+  group_by(dose,reversal,day_table)|>
+  summarise(m_crit_per_100=mean(crit_per_100),
+            m_win_stay_prob=mean(win_stay_prob),
+            m_lose_shift_prob=mean(lose_shift_prob),
+            m_accuracy=mean(accuracy),
+            m_crits=mean(crits),
+            m_n_trials=mean(n_trials),
+            m_trials_to_rev=mean(trials_to_rev),
+            median_trials_to_rev=median(trials_to_rev),
+            total=n(),
+            stdv_trials_to_rev=sd(trials_to_rev)/sqrt(n()))
+
+prl_by_rev$subj_id<-as.factor(prl_by_rev$subj_id)
+#reversal_plot<-
+
+plot<-m_prl_sum|>
+  filter(reversal<6)|>
+  ggplot(mapping=aes(x=reversal,y=median_trials_to_rev,group = dose,colour=dose))+
+  ylab("Median Trials To Criteria")
+
+plot<-m_prl_sum|>
+  filter(reversal<6)|>
+  ggplot(mapping=aes(x=reversal,y=m_trials_to_rev,group = dose,colour=dose))+
+  ylab("Mean Trials To Criteria")
+
+reversal_plot<-plot+
+  geom_line(linewidth=1,(aes(linetype = dose)))+
+  geom_point(size=2,aes(shape=dose))+
+  geom_errorbar(aes(ymax=m_trials_to_rev+stdv_trials_to_rev,
+                    ymin=m_trials_to_rev-stdv_trials_to_rev),
+                width=0,
+                linewidth = 1)+
+  geom_errorbar(aes(ymax=m_trials_to_rev+stdv_trials_to_rev,
+                    ymin=m_trials_to_rev+stdv_trials_to_rev),
+                width=0.2,
+                linewidth=1)+
+  xlab("Reversal") +
+  # geom_point(data=prl_sum,
+  #            mapping = aes(x=reversal,y=trials_to_rev,colour = dose,shape=subj_id))+
+  #scale_colour_brewer(palette = "Dark2",name = "dose")+
+  scale_x_continuous(breaks=0:5,
+                     minor_breaks = 1)+
+  scale_y_continuous(breaks = seq(0,60,5),
+                     minor_breaks = 15,
+                     limits=c(0,60))+
+  #  scale_colour_manual(breaks=c("Saline","0.05mg/kg","0.1mg/kg"),values = c('#C3D69B','#B3A2C7','#FFC000'))+
+  theme(
+    #panel.grid.major = element_blank(), 
+    #  panel.grid.minor = element_blank(),
+    #   panel.background = element_blank(),
+    #      panel.background = element_rect(fill='#BFCE92'),
+    #   text=element_text(family="Aptos"),
+    #  plot.background = element_rect(fill='transparent', colour=NA),
+    axis.line = element_line(colour = "black"),
+    axis.text.x=element_text(face="bold",colour="black",vjust = 1,hjust = 1),
+    axis.text.y=element_text(face="bold",colour="black"),
+    axis.title.x = element_text(face="bold",colour="black"),
+    axis.title.y = element_text(face="bold",colour="black"),
+    legend.title = element_text(face="bold"),
+    legend.text = element_text(),
+   # legend.position = c(0.175, 0.93)
+#    legend.position = c(0.175, 0.39)
+    legend.position = c(0.84, 0.9)
+  )+
+  color_palette(c('#C3D69B','#B3A2C7','#FFC000'))+ 
+  labs(colour='Dose',shape="Dose",linetype="Dose")+
+  #geom_point(data=filter(prl_by_rev,reversal<7),aes(y=trials_to_rev),position = "jitter")+
+  facet_grid(day_table~.)
+
+reversal_plot
+n_plot<-
+  m_prl_sum|>
+  filter(reversal<6)|>
+  ggplot(mapping=aes(x=reversal,y=total,group = dose,colour=dose))+
+  geom_line(linewidth=1,(aes(linetype = dose)))+
+  geom_point(size=2,aes(shape=dose))+
+  ylab("(n) Mice")+
+  xlab("Reversal")+
+  scale_x_continuous(breaks=0:5,
+                     minor_breaks = 1)+
+  scale_y_continuous(breaks = seq(0,12,1),
+                     minor_breaks = 1,
+                     limits=c(0,12))+
+  theme(
+    axis.line = element_line(colour = "black"),
+    axis.text.x=element_text(face="bold",colour="black",vjust = 1,hjust = 1),
+    axis.text.y=element_text(face="bold",colour="black"),
+    axis.title.x = element_text(face="bold",colour="black"),
+    axis.title.y = element_text(face="bold",colour="black"),
+    legend.title = element_text(face="bold"),
+    legend.text = element_text(),
+    legend.position = c(0.175, 0.615)
+  #  legend.position = c(0.85, 0.8)
+  #  legend.position = c(0.175, 0.115) #two facet stack
+  )+
+  color_palette(c('#C3D69B','#B3A2C7','#FFC000'))+ 
+  labs(colour='Dose',shape="Dose",linetype="Dose")+
+    facet_grid(day_table~.)
+
+n_plot 
+bh<-16 #for facet grid
+#bh<-9 #for single
+bw<-11
+  cowplot::save_plot(filename=paste0('Figures/Essay_YR3/',experiment,'/',Sys.Date(),'/ReversalPlot.png'),
+                     plot=reversal_plot,
+                     #bg="transparent,
+                     units="cm",
+                     base_height =bh,
+                     base_width=bw)
+1
+  cowplot::save_plot(filename=paste0('Figures/Essay_YR3/',experiment,'/',Sys.Date(),'/n_Plot.png'),
+                     plot=n_plot,
+                     #bg="transparent,
+                     units="cm",
+                     base_height =bh,
+                     base_width=bw)
+
+
+
+
+```
+
+#8.ANALYSE
+
+###8.1 Load processed data back into environment
+
+```{r}
+summary_reversal<-read.csv(paste0(OUTPUT_DIR,"/summary_reversal_",experiment,".csv"))
+```
+
+
+###8.1 2-Way Mixed Anova
+
+```{r}
+
+########Two way mixed ANOVA
+#install.packages("rstatix")
+library("rstatix")
+library("ggpubr")
+library("tidyverse")
+#rm(list=ls())
+
+summary_reversal<-filter(summary_reversal,
+                 !is.na(dose))
+
+summary_reversal$dose<-factor(summary_reversal$dose,levels = c("Saline","0.05","0.1"),labels = c("Saline","0.05mg/kg","0.1mg/kg"))
+
+variables<-names(summary_reversal)[6:13]
+
+df<-data.frame(matrix(ncol=7,nrow=length(variables)))
+names(df)<-c("Variable","initiate","initiate *sig","dose","dose *sig","initiate:dose","initiate:dose *sig")
+
+#variables[8]
+i<-4
+
+for (i in 1:length(variables)){
+  
+  variable<-variables[i]
+  
+  #create frame
+  prl_test<-data.frame(subj_id=summary_reversal$subj_id,
+                       initiate=summary_reversal$day_table,
+                       dose=summary_reversal$dose,
+                       dependent=summary_reversal[[variable]])
+  
+  ##summary stats
+  prl_test|>
+    group_by(dose,initiate)|>
+    get_summary_stats(dependent,type="mean_sd")
+  
+  
+  ##visualise
+  prl_test|>
+    ggplot(mapping=aes(x=dose,
+                       colour= initiate,
+                       y=dependent))+
+    geom_boxplot()+
+    ylab(variables[i])
+  
+
+  
+  
+  ###Identify and delete outliers
+  # #create unique labels to delete columns
+  # prl_test$lab<-1:dim(prl_test)[1]
+  # #run identify outliers
+  # test<-(prl_test|>
+  #          group_by(dose,initiate)|>
+  #          identify_outliers(dependent))
+  # #subset extreme outliers
+  # test<-subset(test,is.extreme==TRUE)
+  # #remove outliers
+  # prl_test <- subset(prl_test, (!lab %in% test$lab))
+  # #
+  # if (dim(test)[1]>0) {warning("Extreme Outliers!")}
+  # 
+  # #remove identifying column
+  # prl_test<-
+  #   prl_test|>
+  #   select(-lab)
+  # 
+  ###Note:none removed for number of trials, 3 moderate outliers for highest group
+  
+  #check normality
+  #1. First plot
+  ggplot(prl_test, aes(sample=dependent)) +
+    stat_qq() + 
+    stat_qq_line()+
+    facet_grid(dose~initiate)
+  
+  
+  #2. Then histogram
+  prl_test|>
+    ggplot(mapping=aes(x=dependent))+
+    geom_histogram()+
+    facet_grid(dose~initiate)
+  
+  #3. Finally Shapiro-wilk, want over 0.05
+  prl_test|>
+    group_by(dose,initiate)|>
+    shapiro_test(dependent)
+  
+  
+  #!! its not normal, logit transform
+  #prl_test$dependent<-log((prl_test$dependent/(1-prl_test$dependent)))
+  #log((x/(1-x)))
+  
+  #Homogeneity of variance, want over 0.05
+  prl_test|>
+    group_by(dose)|>
+    levene_test(dependent~initiate)
+  
+  #homogeneity of covariance, want over 0.001
+  box_m(prl_test[,"dependent",drop=FALSE],prl_test$initiate)
+  
+  #Conduct ANOVA
+  res.aov <- anova_test(data = prl_test, dv = dependent, wid = subj_id, within = dose ,between = initiate)
+  aov.tab<-get_anova_table(res.aov)
+  
+  
+  df$Variable[i]<-variables[i]
+  df[i,c(2,4,6)]<-aov.tab$p
+  df[i,c(3,5,7)]<-aov.tab$`p<.05`
+  
+}
+
+df
+
+```
+
+###8.2 Post Hoc Tests
+
+```{r}
+
+####POST-HOC for Two-Way Mixed ANOVA
+
+#prl_test$dependent<-log((prl_test$dependent/(1-prl_test$dependent)))
+#log((x/(1-x)))
+
+
+variable<-variables[7]
+
+prl_test<-data.frame(subj_id=summary_reversal$subj_id,
+                     initiate=summary_reversal$day_table,
+                     dose=summary_reversal$dose,
+                     dependent=summary_reversal[[variable]],
+                     cohort=summary_reversal$cohort)
+
+#logit
+#prl_test$dependent<-log((prl_test$dependent/(1-prl_test$dependent)))
+
+# prl_test<-prl_test|>
+#   filter(cohort=="Cohort2")
+
+##Conduct the ANOVA again
+res.aov <- anova_test(data = prl_test, dv = dependent, wid = subj_id, within = dose ,between = initiate)
+aov.tab<-get_anova_table(res.aov)
+aov.tab
+
+#If there is a significant INTERACTION
+
+one.way <- prl_test |>
+  group_by(dose) |>
+  anova_test(dv = dependent, wid = subj_id, between = initiate) |>
+  get_anova_table() |>
+  adjust_pvalue(method = "bonferroni")
+
+pwc<-prl_test|>
+  group_by(dose)|>
+  pairwise_t_test(dependent~initiate,p.adjust.method = "bonferroni")
+
+prl_test|>
+  pairwise_t_test(dependent~dose,p.adjust.method = "bonferroni")
+
+
+#If there is significant simple main effects you do simple pairwise comparisons
+#but i havent done this here
+```
+
+###8.3 Formatted Stats plots
+
+```{r}
+
+#this requires the completed ANOVA (initial test) and PWC (post-hoc test) from before
+
+###Boxplot significance
+pwc <- pwc |>
+  add_xy_position(x = "dose")|>
+  filter(!p.adj.signif=="ns")
+
+prl_test|>
+  ggplot(mapping=aes(x=dose,
+                     y=dependent,
+                     group = interaction(dose,initiate)))+
+  geom_boxplot()+ 
+  stat_pvalue_manual(pwc) +
+  labs(
+    subtitle = get_test_label(aov.tab, detailed = TRUE),
+    caption = get_pwc_label(pwc)
+  )+
+  ylab(variable)
+
+###experiments...
+
+prl_test|>
+  ggplot(mapping=aes(x=dose,
+                     y=dependent,
+                     alpha = initiate,
+                     fill=dose))+
+  geom_boxplot()+ 
+  stat_pvalue_manual(pwc) +
+  labs(
+    subtitle = get_test_label(aov.tab, detailed = TRUE,row = 2),
+    caption = get_pwc_label(pwc)
+  )+
+  ylab(variable)+
+      scale_fill_manual(values=c('#C3D69B','#B3A2C7','#FFC000'))
+
+
+
+pwc_EDIT<-pwc
+pwc_EDIT$xmin<-0.7
+pwc_EDIT$xmax<-1.8
+
+###BY PHASE, formatted 
+
+
+prl_test|>
+  ggplot(mapping=aes(x=initiate,
+                     y=dependent,
+                     group = interaction(dose,initiate),
+                     fill=dose))+
+  geom_boxplot()+ 
+  stat_pvalue_manual(pwc_EDIT) +
+  labs(
+    subtitle = get_test_label(aov.tab, detailed = TRUE),
+    caption = get_pwc_label(pwc_EDIT)
+  )+
+  ylab(variable)+
+      scale_fill_manual(values=c('#C3D69B','#B3A2C7','#FFC000'))
+
+
+
+
+
+
+
+
+# Not sure what this is...
+# variable<-"m_initiate_latency"
+# variable<-"n_trials"
+# variable<-"accuracy"
+# variable<-"m_reward_latency"
+# variable<-"m_response_latency"
+# variable<-"win_stay_prob"
+# variable<-"true_win_stay_prob"
+# 
+# {prl_test<-data.frame(subj_id=prl_sum$subj_id,
+#                       dose=prl_sum$dose,
+#                       dependent=prl_sum[[variable]])
+#   
+#   pwc<-prl_test |>
+#     pairwise_t_test(
+#       dependent ~ dose, paired = TRUE,
+#       p.adjust.method = "bonferroni"
+#     )
+#   
+#   res.aov <- anova_test(data = prl_test, dv = dependent, wid = subj_id, within = dose)
+#   
+#   pwc <- pwc |>
+#     add_xy_position(x = "dose")|>
+#     filter(!p.adj.signif=="ns")}
+
+```
+
+###8.5 Trials per reversal Three Way Mixed
+
+```{r}
+########Two way mixed ANOVA
+#install.packages("rstatix")
+library("rstatix")
+library("ggpubr")
+library("tidyverse")
+#rm(list=ls())
+
+prl_by_rev<-read.csv(paste0(OUTPUT_DIR,"/trials_per_rev_processed",experiment,".csv"))
+prl_by_rev$dose<-factor(prl_by_rev$dose,levels =c("Saline","0.05","0.1"),labels = c("Saline","0.05mg/kg","0.1mg/kg") )
+
+#create frame
+  prl_test<-data.frame(subj_id=prl_by_rev$subj_id,
+                       initiate=prl_by_rev$day_table,
+                       dose=prl_by_rev$dose,
+                       reversal=prl_by_rev$reversal,
+                       trials_to_rev=prl_by_rev$trials_to_rev)
+#filter
+  prl_test<-prl_test|>
+    filter(reversal<4)
+  
+#anova
+  res.aov<-anova_test(data=prl_test,
+                      dv=trials_to_rev,
+                      wid=subj_id,
+                      between=initiate,
+                      within = c(dose,reversal))
+  
+  
+  get_anova_table(res.aov)
+  
+  
+
+
+
+```
+
+
+
+
+
