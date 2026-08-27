@@ -1,47 +1,4 @@
-
-```{r}
-#| label: read trl
-
-
-for (FILE in files_to_analyse) {
-
-    if (FILE == files_to_analyse[1]) sessions <- list()
-
-    # For trouble shooting
-    # FILE = files_to_analyse[1]
-
-    # Read in all the data from FILE as lines
-    # and store in temporary holder, as_lines
-    as_lines <- read_lines(file.path(DATA_DIR, FILE))
-    
-    # Trials start at
-    pos_starts <- grep(pattern = TRUE,
-                       x = str_starts(string = as_lines,
-                                      pattern = 'Ref')
-                       ) + 1
-    
-    # Trials end at
-    pos_ends <- grep(pattern = TRUE,
-                     x = str_starts(string = as_lines,
-                                    pattern = 'ACTIVITYLOG')
-                     ) - 2
-    
-    # Identify relevant rows (indices) for various bits of information 
-    pos_Subject_Id <- grep(pattern = TRUE,
-                           x = str_starts(string = as_lines,
-                                          pattern = 'Subject Id')
-                           )
-    
-    # Set up various place holders
-    subjects_in_file <- vector()
-    dates_in_file <- vector()
-    start_times_in_file <- vector()
-    boxes_in_file <- vector()
-    databases_in_file <- vector()
-    day_tables_in_file <- vector()
-    
-    
-    # TODO: consider improving this solution to get the Subject IDs out
+# TODO: consider improving this solution to get the Subject IDs out
     for (i in 1:length(pos_Subject_Id))  {
       
       # List of subjects
